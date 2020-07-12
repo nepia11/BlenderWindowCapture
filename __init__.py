@@ -1,7 +1,15 @@
+# スクリプトリロード時のモジュールリロードに対応
+# https://colorful-pico.net/introduction-to-addon-development-in-blender/2.8/html/chapter_02/06_Divide_Add-on_Source_Code_Into_Multiple_Files.html
+if "bpy" in locals():
+    import imp
+    imp.reload(window_capture)
+else:
+    from . import window_capture
+
+
 import bpy
 
-from .window_capture import WindowCapture
-
+WindowCapture = window_capture.WindowCapture
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 3 of the License, or
