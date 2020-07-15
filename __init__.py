@@ -1,10 +1,12 @@
 # スクリプトリロード時のモジュールリロードに対応
 # https://colorful-pico.net/introduction-to-addon-development-in-blender/2.8/html/chapter_02/06_Divide_Add-on_Source_Code_Into_Multiple_Files.html
 if "bpy" in locals():
-    import imp
-    imp.reload(window_capture)
+    import importlib
+    importlib.reload(window_capture)
+    importlib.reload(op_under_cursor_capture)
 else:
     from . import window_capture
+    from . import op_under_cursor_capture
 
 
 import bpy
@@ -71,6 +73,7 @@ class WindowCaptureOperator(bpy.types.Operator):
             pass
             return {"FINISHED"}
 
+        # タイマーイベントが来たときに処理？
         if event.type == "TIMER":
             # メイン処理
             WindowCaptureOperator.__cap.capture(event.mouse_x, event.mouse_y)
@@ -97,9 +100,12 @@ class UIPanel(bpy.types.Panel):
         else:
             layout.operator(WindowCaptureOperator.bl_idname, text="end", icon="PAUSE")
 
+
 classes = [
     WindowCaptureOperator,
     UIPanel,
+    op_under_cursor_capture.UnderCursorCaptureOperator,
+    op_under_cursor_capture.UIPanel_cursor,
 ]
 
 def register():

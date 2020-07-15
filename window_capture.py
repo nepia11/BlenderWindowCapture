@@ -70,11 +70,28 @@ def draw_cursor(image, x, y):
 
 
 class WindowCapture:
-    def __init__(self, image_name="WindowCapture"):
+    def __init__(self, image_name="WindowCapture", is_cursor_capture=False):
         self.image_name = image_name
         self.width = 0
         self.height = 0
-        self.__update_size()
+        if is_cursor_capture:
+            self.__create_buffer(1,1,self.image_name,1,1)
+        else:
+            self.__update_size()
+
+    def __create_buffer(
+        self, 
+        src_width, 
+        src_height, 
+        image_name, 
+        image_width, 
+        image_height
+        ):
+        self.buffer = bgl.Buffer(bgl.GL_BYTE, src_width * src_height * 4)
+        
+        # self.image = get_image(self.image_name, self.width, self.height)
+        self.image = get_image(image_name, image_width, image_height)
+        self.image.scale(image_width, image_height)
 
     def __update_size(self):
         if (
@@ -88,10 +105,27 @@ class WindowCapture:
                 self.width, self.height, IMAGE_WIDTH, IMAGE_HEIGHT
             )
 
-            self.buffer = bgl.Buffer(bgl.GL_BYTE, self.width * self.height * 4)
-            # self.image = get_image(self.image_name, self.width, self.height)
-            self.image = get_image(self.image_name, IMAGE_WIDTH, IMAGE_HEIGHT)
-            self.image.scale(IMAGE_WIDTH, IMAGE_HEIGHT)
+            self.__create_buffer(
+                self.width,
+                self.height,
+                self.image_name,
+                IMAGE_WIDTH,
+                IMAGE_HEIGHT
+                )
+
+    def __update_image(self, mouse_x, mouse_y):
+        # self.image.pixels = [v / 255 for v in self.buffer]
+
+        remapped_buffer = remap(self.buffer, self.remapping_indexes)
+        time_diff("remap")
+        self.image.pixels = [v / 255 for v in remapped_buffer]
+        # self.image.pixels = [v for v in self.buffer]
+
+        if mouse_x is not None and mouse_y is not None:
+            draw_cursor(self.image, mouse_x / self.width * IMAGE_WIDTH, mouse_y / self.height * IMAGE_HEIGHT)
+
+        time_diff("image.pixels")
+
 
     def capture(self, mouse_x=None, mouse_y=None):
         time_diff()
@@ -99,6 +133,7 @@ class WindowCapture:
         time_diff("__update_size")
         bgl.glReadBuffer(bgl.GL_FRONT)
         time_diff("glReadBuffer")
+        # GL_FLOATでバッファ作って読むと馬鹿みたいに重いのでGL_BYTE,GL_UNSIGNED_BYTEになってる
         bgl.glReadPixels(
             0,
             0,
@@ -106,16 +141,29 @@ class WindowCapture:
             self.height,
             bgl.GL_RGBA,
             bgl.GL_UNSIGNED_BYTE,
+            # bgl.GL_FLOAT,
             self.buffer,
         )
         time_diff("glReadPixels")
-        # self.image.pixels = [v / 255 for v in self.buffer]
-        remapped_buffer = remap(self.buffer, self.remapping_indexes)
-        time_diff("remap")
-        self.image.pixels = [v / 255 for v in remapped_buffer]
+        self.__update_image(mouse_x, mouse_y)
 
-        if mouse_x is not None and mouse_y is not None:
-            draw_cursor(self.image, mouse_x / self.width * IMAGE_WIDTH, mouse_y / self.height * IMAGE_HEIGHT)
-
+    def capture_under_cursor(self, mouse_x=None, mouse_y=None):
+        bgl.glReadBuffer(bgl.GL_FRONT)
+        time_diff("glReadBuffer")
+        # GL_FLOATでバッファ作って読むと馬鹿みたいに重いのでGL_BYTE,GL_UNSIGNED_BYTEになってる
+        bgl.glReadPixels(
+            mouse_x,
+            mouse_y,
+            1,
+            1,
+            bgl.GL_RGBA,
+            bgl.GL_UNSIGNED_BYTE,
+            # bgl.GL_FLOAT,
+            self.buffer,
+        )
+        time_diff("glReadPixels")
+        # self.__update_image(mouse_x, mouse_y)
+        self.image.pixels = [v / 255 for v in self.buffer]
         time_diff("image.pixels")
+
 
