@@ -3,11 +3,13 @@ import bpy
 import bgl
 import gpu
 from gpu_extras.presets import draw_texture_2d
+import array
+import numpy as np
 
 start_time = time()
 
-IMAGE_WIDTH = 256
-IMAGE_HEIGHT = 256
+IMAGE_WIDTH:int = 256
+IMAGE_HEIGHT:int = 256
 
 def time_diff(text: str = ""):
     global start_time
@@ -17,20 +19,25 @@ def time_diff(text: str = ""):
     start_time = now
 
 
-def get_image(image_name, width, height):
+def get_image(image_name:str, width:int, height:int):
     if not image_name in bpy.data.images:
         return bpy.data.images.new(image_name, width, height, alpha=True)
     return bpy.data.images[image_name]
 
-def get_uv_index(u, v, width, height):
+def get_uv_index(u:float, v:float, width:int, height:int) -> int:
     x = int(u * width)
     y = int(v * height)
-    return y * width + x
+    return int(y * width + x)
 
 
 # フルバッファーを読みたくない、間欠的に読み出す
-def create_remapping_indexes(source_width, source_height, dest_width, dest_height):
-    indexes = [0] * dest_width * dest_height * 4
+def create_remapping_indexes(
+    source_width: int,
+    source_height: int,
+    dest_width: int,
+    dest_height: int):
+    # indexes = [0] * dest_width * dest_height * 4
+    indexes = array.array("L",[0] * dest_width * dest_height * 4)
 
     for y in range(dest_height):
         for x in range(dest_width):
@@ -48,12 +55,25 @@ def create_remapping_indexes(source_width, source_height, dest_width, dest_heigh
     print("indexes:" + str(indexes))
     return indexes
 
+def generate_byte_to_float_table():
+    # table = array.array("f",range(256))
+    table = np.array(range(256),dtype="float32")
+    table = table / 256
+    return table
 
-def remap(buffer, indexes):
+def remap(
+    buffer, 
+    indexes, 
+    remaping_table
+    ):
+    # 現在
     result = [0] * len(indexes)
 
     for index, buffer_index in enumerate(indexes):
-        result[index] = buffer[buffer_index]
+        # result[index] = buffer[buffer_index]
+        result[index] = remaping_table[buffer[buffer_index]]
+    
+    # result = result / 255
 
     return result
 
@@ -68,12 +88,12 @@ def draw_cursor(image, x, y):
     image.pixels[index + 2] = 1.0
     image.pixels[index + 3] = 1.0
 
-
 class WindowCapture:
     def __init__(self, image_name="WindowCapture", is_cursor_capture=False):
         self.image_name = image_name
         self.width = 0
         self.height = 0
+        self.remapping_table = generate_byte_to_float_table()
         if is_cursor_capture:
             self.__create_buffer(1,1,self.image_name,1,1)
         else:
@@ -81,11 +101,11 @@ class WindowCapture:
 
     def __create_buffer(
         self, 
-        src_width, 
-        src_height, 
-        image_name, 
-        image_width, 
-        image_height
+        src_width:int, 
+        src_height:int, 
+        image_name:str, 
+        image_width:int, 
+        image_height:int,
         ):
         self.buffer = bgl.Buffer(bgl.GL_BYTE, src_width * src_height * 4)
         
@@ -114,18 +134,17 @@ class WindowCapture:
                 )
 
     def __update_image(self, mouse_x, mouse_y):
-        # self.image.pixels = [v / 255 for v in self.buffer]
 
-        remapped_buffer = remap(self.buffer, self.remapping_indexes)
-        time_diff("remap")
-        self.image.pixels = [v / 255 for v in remapped_buffer]
-        # self.image.pixels = [v for v in self.buffer]
+        self.image.pixels = remap(
+            self.buffer, 
+            self.remapping_indexes, 
+            self.remapping_table
+            )
 
         if mouse_x is not None and mouse_y is not None:
             draw_cursor(self.image, mouse_x / self.width * IMAGE_WIDTH, mouse_y / self.height * IMAGE_HEIGHT)
 
-        time_diff("image.pixels")
-
+        time_diff("remap, save image.pixels")
 
     def capture(self, mouse_x=None, mouse_y=None):
         time_diff()
@@ -133,7 +152,6 @@ class WindowCapture:
         time_diff("__update_size")
         bgl.glReadBuffer(bgl.GL_FRONT)
         time_diff("glReadBuffer")
-        # GL_FLOATでバッファ作って読むと馬鹿みたいに重いのでGL_BYTE,GL_UNSIGNED_BYTEになってる
         bgl.glReadPixels(
             0,
             0,
@@ -141,7 +159,6 @@ class WindowCapture:
             self.height,
             bgl.GL_RGBA,
             bgl.GL_UNSIGNED_BYTE,
-            # bgl.GL_FLOAT,
             self.buffer,
         )
         time_diff("glReadPixels")
